@@ -53,6 +53,14 @@ export default function App() {
   
   // Estados Customizados - CRM Leads, Isolamento por Polo e Fluxo de Caixa
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [moodleCourses, setMoodleCourses] = useState<{
+  id: number;
+  fullname: string;
+  shortname: string;
+  categoryid: number;
+  visible: number;
+  }[]>([]);
+  const [loadingMoodleCourses, setLoadingMoodleCourses] = useState(false);
   const [selectedPoloContext, setSelectedPoloContext] = useState<string>("MATRIZ"); // MATRIZ ou polo_id (string)
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [searchLead, setSearchLead] = useState("");
@@ -193,40 +201,65 @@ export default function App() {
   };
 
   useEffect(() => {
-    loadAllData();
+  loadAllData();
+  loadMoodleCourses();
   }, []);
+
+  const loadMoodleCourses = async () => {
+  try {
+    setLoadingMoodleCourses(true);
+    const res = await fetch("/api/moodle/courses");
+    const data = await res.json();
+    if (Array.isArray(data)) {
+      setMoodleCourses(data.filter((c: any) => c.visible === 1));
+    }
+  } catch (e) {
+    console.error("Erro ao buscar cursos do Moodle:", e);
+  } finally {
+    setLoadingMoodleCourses(false);
+  }
+  };
 
   // SUBMISSÃO DE FORMULÁRIOS
 
-  const handleCreateStudent = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newStudent.nome || !newStudent.email || !newStudent.matricula) {
-      triggerFeedback('error', "Por favor, preencha os campos obrigatórios.");
-      return;
-    }
-    try {
-      const res = await fetch("/api/students", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...newStudent,
-          polo_id: newStudent.polo_id ? Number(newStudent.polo_id) : null,
-          course_id: newStudent.course_id ? Number(newStudent.course_id) : null
-        })
+const handleCreateStudent = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!newStudent.nome || !newStudent.email || !newStudent.matricula) {
+    triggerFeedback("error", "Por favor, preencha os campos obrigatórios.");
+    return;
+  }
+  try {
+    const res = await fetch("/api/students", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...newStudent,
+        polo_id: newStudent.polo_id ? Number(newStudent.polo_id) : null,
+        course_id: newStudent.course_id ? Number(newStudent.course_id) : null,
+      }),
+    });
+    if (res.ok) {
+      const createdStudent = await res.json();
+      triggerFeedback("success", "Aluno matriculado com sucesso!");
+      setShowStudentModal(false);
+      setNewStudent({
+        nome: "", email: "", matricula: "", status: "ATIVO",
+        data_nascimento: "", telefone: "", polo_id: "", course_id: ""
       });
-      if (res.ok) {
-        triggerFeedback('success', "Aluno matriculado com sucesso!");
-        setShowStudentModal(false);
-        setNewStudent({ nome: "", email: "", matricula: "", status: "ATIVO", data_nascimento: "", telefone: "", polo_id: "", course_id: "" });
-        loadAllData();
-      } else {
-        const err = await res.json();
-        triggerFeedback('error', err.error || "Falha ao registrar aluno.");
+      loadAllData();
+ 
+      // Se selecionou um curso do Moodle, matricular automaticamente no AVA
+      if (newStudent.course_id && createdStudent.id) {
+        await handleEnrollInMoodle(createdStudent.id, Number(newStudent.course_id));
       }
-    } catch (err) {
-      triggerFeedback('error', "Erro de rede ao enviar.");
+    } else {
+      const err = await res.json();
+      triggerFeedback("error", err.error || "Falha ao registrar aluno.");
     }
-  };
+  } catch (err) {
+    triggerFeedback("error", "Erro de rede ao enviar.");
+  }
+};
 
   // --- GESTÃO E EVENTOS DE LEADS (CRM) ---
   const handleCreateOrUpdateLead = async (e: React.FormEvent) => {
@@ -443,6 +476,28 @@ export default function App() {
       triggerFeedback('error', "Erro de conexão de rede.");
     }
   };
+
+  const handleEnrollInMoodle = async (studentId: number, moodleCourseId: number) => {
+  try {
+    const res = await fetch("/api/moodle/enroll", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        student_id: studentId,
+        moodle_course_id: moodleCourseId,
+      }),
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      triggerFeedback("success", `✅ ${data.message}`);
+      loadAllData();
+    } else {
+      triggerFeedback("error", data.error || "Erro ao matricular no AVA.");
+    }
+  } catch (e) {
+    triggerFeedback("error", "Erro de rede ao matricular no Moodle.");
+  }
+};
 
   // --- CONFIG GESTÃO NO MOODLE ---
   const handleSaveMoodleConfig = async (e: React.FormEvent) => {
@@ -1789,6 +1844,29 @@ export default function App() {
                                     >
                                       IA Consultar
                                     </button>
+
+<button
+  onClick={async () => {
+    // Buscar cursos matriculados no Moodle
+    const res = await fetch(`/api/moodle/student-courses/${encodeURIComponent(s.email)}`);
+    const data = await res.json();
+    if (data.enrolled) {
+      triggerFeedback("success", `✅ Já matriculado em ${data.courses.length} curso(s) no AVA.`);
+    } else {
+      // Se tiver course_id, matricular automaticamente
+      if (s.course_id) {
+        await handleEnrollInMoodle(s.id, s.course_id);
+      } else {
+        triggerFeedback("error", "Aluno sem curso vinculado. Edite o aluno e selecione um curso do AVA.");
+      }
+    }
+  }}
+  className="text-xs text-emerald-600 hover:text-emerald-800 font-semibold"
+  title="Matricular no AVA Moodle"
+>
+  AVA Sync
+</button>
+
                                     <span className="text-slate-200">|</span>
                                     <button 
                                       onClick={() => handleDeleteStudent(s.id)}
@@ -4228,41 +4306,40 @@ export default function App() {
                   </select>
                 </div>
 
-                <div className="space-y-1 sm:col-span-2">
-                  <label className="text-[11px] font-bold text-slate-600 block">Curso de Matrícula *</label>
-                  <select 
-                    required
-                    value={newStudent.course_id || ""}
-                    onChange={(e) => setNewStudent({...newStudent, course_id: e.target.value})}
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white transition-all font-medium text-slate-800 focus:ring-indigo-600 focus:border-indigo-600"
-                  >
-                    <option value="">Selecione um curso escolar...</option>
-                    {(() => {
-                      const selectedPolo = newStudent.polo_id ? polos.find(p => p.id === Number(newStudent.polo_id)) : null;
-                      const hasMoodleFilter = selectedPolo && selectedPolo.cursos_moodle_apenas;
-                      const list = hasMoodleFilter 
-                        ? courses.filter(c => c.moodle_course_id && c.moodle_course_id.trim() !== "")
-                        : courses;
-                      return list.map(c => (
-                        <option key={c.id} value={c.id}>
-                          {c.nome} - {c.categoria} (R$ {c.preco_mensal}/mês) {hasMoodleFilter ? "[Moodle Ativo]" : ""}
-                        </option>
-                      ));
-                    })()}
-                  </select>
-                  {(() => {
-                    const selectedPolo = newStudent.polo_id ? polos.find(p => p.id === Number(newStudent.polo_id)) : null;
-                    if (selectedPolo && selectedPolo.cursos_moodle_apenas) {
-                      return (
-                        <p className="text-[10px] text-indigo-700 font-semibold bg-indigo-50 rounded-lg p-2 mt-1">
-                          🔒 Restrição do Polo: Exibindo apenas cursos vinculados ao Moodle (ID Moodle ativo).
-                        </p>
-                      );
-                    }
-                    return null;
-                  })()}
-                </div>
-
+<div className="space-y-1 sm:col-span-2">
+  <label className="text-[11px] font-bold text-slate-600 block flex items-center gap-1.5">
+    Curso do AVA Moodle *
+    {loadingMoodleCourses && (
+      <span className="text-[9px] text-indigo-500 animate-pulse">carregando AVA...</span>
+    )}
+    <button
+      type="button"
+      onClick={loadMoodleCourses}
+      className="text-[9px] text-slate-400 hover:text-indigo-600 underline ml-auto"
+    >
+      Atualizar lista
+    </button>
+  </label>
+  <select
+    required
+    value={newStudent.course_id || ""}
+    onChange={(e) => setNewStudent({ ...newStudent, course_id: e.target.value })}
+    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white transition-all font-medium text-slate-800"
+  >
+    <option value="">Selecione um curso do AVA...</option>
+    {moodleCourses.map((c) => (
+      <option key={c.id} value={c.id}>
+        {c.fullname} ({c.shortname})
+      </option>
+    ))}
+    {moodleCourses.length === 0 && !loadingMoodleCourses && (
+      <option disabled value="">Nenhum curso encontrado no AVA</option>
+    )}
+  </select>
+  <p className="text-[9px] text-indigo-600 font-medium">
+    📚 Cursos carregados diretamente do ava.imepedu.com.br
+  </p>
+</div>                                                                                                                                    
                 <div className="space-y-1 sm:col-span-2">
                   <label className="text-[11px] font-bold text-slate-600 block">Situação de Matrícula</label>
                   <select 
