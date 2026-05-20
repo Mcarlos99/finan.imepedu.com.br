@@ -1,0 +1,6 @@
+{
+  "name": "EduFinance — Gestão Escolar",
+  "description": "Sistema completo de gestão escolar com controle acadêmico, financeiro e suporte integrado compatível com MySQL e CloudPanel.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
