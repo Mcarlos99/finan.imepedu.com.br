@@ -592,56 +592,6 @@ app.patch("/api/students/:id/status", async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// ==========================================
-// CURSOS ADICIONAIS DO ALUNO (student_courses)
-// ==========================================
-
-// GET /api/students/:id/courses — listar cursos do aluno
-app.get("/api/students/:id/courses", async (req, res) => {
-  try {
-    const studentId = Number(req.params.id);
-    if (dbStatus.mode === "MYSQL" && mysqlPool) {
-      const [rows] = await mysqlPool.query(
-        "SELECT * FROM student_courses WHERE student_id = ? ORDER BY created_at ASC", [studentId]
-      );
-      res.json(rows);
-    } else {
-      res.json([]);
-    }
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
-});
-
-// POST /api/students/:id/courses — adicionar curso ao aluno
-app.post("/api/students/:id/courses", async (req, res) => {
-  try {
-    const studentId = Number(req.params.id);
-    const { course_nome, course_id, moodle_course_id, valor_matricula, num_parcelas } = req.body;
-
-    if (!course_nome) { res.status(400).json({ error: "Nome do curso é obrigatório." }); return; }
-
-    if (dbStatus.mode === "MYSQL" && mysqlPool) {
-      const [result]: any = await mysqlPool.query(
-        "INSERT INTO student_courses (student_id, course_nome, course_id, moodle_course_id, valor_matricula, num_parcelas) VALUES (?, ?, ?, ?, ?, ?)",
-        [studentId, course_nome, course_id || null, moodle_course_id || null, valor_matricula || null, num_parcelas || 1]
-      );
-      res.status(201).json({ id: result.insertId, student_id: studentId, course_nome, course_id, moodle_course_id, valor_matricula, num_parcelas });
-    } else {
-      res.status(201).json({ id: Date.now(), student_id: studentId, course_nome, course_id, moodle_course_id, valor_matricula, num_parcelas });
-    }
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
-});
-
-// DELETE /api/students/courses/:courseId — remover curso do aluno
-app.delete("/api/students/courses/:courseId", async (req, res) => {
-  try {
-    const courseId = Number(req.params.courseId);
-    if (dbStatus.mode === "MYSQL" && mysqlPool) {
-      await mysqlPool.query("DELETE FROM student_courses WHERE id = ?", [courseId]);
-    }
-    res.json({ success: true });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
-});
-
 // --- MOODLE ---
 
 // Buscar cursos reais do AVA Moodle
@@ -1716,17 +1666,12 @@ app.post("/api/auth/login", async (req, res) => {
 
     // Usuário de polo no banco
     if (dbStatus.mode === "MYSQL" && mysqlPool) {
-      // Buscar polo pelo email e senha (sem filtrar status para poder dar mensagem específica)
       const [rows]: any = await mysqlPool.query(
-        "SELECT * FROM polos WHERE polo_email = ? AND polo_senha_hash = ? LIMIT 1",
+        "SELECT * FROM polos WHERE polo_email = ? AND polo_senha_hash = ? AND status = \'ATIVO\' LIMIT 1",
         [email.toLowerCase(), hashPassword(password)]
       );
       if (rows.length > 0) {
         const polo = rows[0];
-        // Verificar status antes de permitir acesso
-        if (polo.status === "BLOQUEADO" || polo.status === "INATIVO") {
-          res.status(403).json({ error: "Sistema Bloqueado. Ligue para o suporte: (94) 98160-6474" }); return;
-        }
         const token = createSession({ email: polo.polo_email, role: "polo", poloId: polo.id, poloNome: polo.nome });
         res.json({ success: true, token, role: "polo", email: polo.polo_email, nome: polo.nome, poloId: polo.id, poloNome: polo.nome });
         return;
@@ -1735,12 +1680,10 @@ app.post("/api/auth/login", async (req, res) => {
       const data = readLocalData();
       const polo = (data.polos || []).find((p: any) =>
         p.polo_email?.toLowerCase() === email.toLowerCase() &&
-        p.polo_senha_hash === hashPassword(password)
+        p.polo_senha_hash === hashPassword(password) &&
+        p.status === "ATIVO"
       );
       if (polo) {
-        if (polo.status === "BLOQUEADO" || polo.status === "INATIVO") {
-          res.status(403).json({ error: "Sistema Bloqueado. Ligue para o suporte: (94) 98160-6474" }); return;
-        }
         const token = createSession({ email: polo.polo_email, role: "polo", poloId: polo.id, poloNome: polo.nome });
         res.json({ success: true, token, role: "polo", email: polo.polo_email, nome: polo.nome, poloId: polo.id, poloNome: polo.nome });
         return;
@@ -1798,11 +1741,6 @@ app.post("/api/auth/aluno/login", async (req, res) => {
     }
 
     if (!student) { res.status(401).json({ error: "Usuário não encontrado." }); return; }
-
-    // Verificar se o aluno está ativo
-    if (student.status === "INATIVO") {
-      res.status(403).json({ error: "Acesso bloqueado. Sua matrícula está inativa. Entre em contato com a secretaria." }); return;
-    }
 
     // Senha padrão: ImepEdu@2026! (ou senha customizada se implementar futuramente)
     const ALUNO_DEFAULT_PASSWORD = process.env.ALUNO_DEFAULT_PASSWORD || "ImepEdu@2026!";

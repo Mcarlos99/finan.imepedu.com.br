@@ -1,0 +1,17 @@
+{
+  "students": [],
+  "classes": [],
+  "grades": [],
+  "transactions": [],
+  "polos": [],
+  "users": [],
+  "courses": [],
+  "tickets": [],
+  "leads": [],
+  "moodle_config": {
+    "url": "ava.imepedu.com.br",
+    "token": "a7fe17703259c9c3cd64b1324ada075e",
+    "auto_sync": true,
+    "connected": true
+  }
+}

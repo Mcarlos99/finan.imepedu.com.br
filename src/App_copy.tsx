@@ -94,13 +94,6 @@ export default function App() {
   const [cobrancaResult, setCobrancaResult] = useState<any | null>(null);
   const [cobrancaDesconto, setCobrancaDesconto] = useState("0");
 
-  const [showAddCourseModal, setShowAddCourseModal] = useState(false);
-  const [addCourseStudentId, setAddCourseStudentId] = useState<number | null>(null);
-  const [addCourseStudentNome, setAddCourseStudentNome] = useState("");
-  const [addCourseStudentEmail, setAddCourseStudentEmail] = useState("");
-  const [addCourseCourseId, setAddCourseCourseId] = useState("");
-
-
 
 
 
@@ -188,7 +181,7 @@ export default function App() {
 const [newPolo, setNewPolo] = useState({
   nome: "",
   cidade: "",
-  estado: "PA",
+  estado: "SP",
   endereco: "",
   mec_codigo: "",
   status: "ATIVO" as any,
@@ -364,70 +357,7 @@ const handleDeleteSplit = async (splitId: number, poloId: number) => {
 };
 
 
-const handleAddCourseToStudent = async (e: React.FormEvent) => {
-  e.preventDefault();
-  if (!addCourseStudentId || !addCourseCourseId) {
-    triggerFeedback("error", "Selecione um curso.");
-    return;
-  }
- 
-  // Resolver nome e ID do curso
-  const isCat = addCourseCourseId.startsWith("cat_");
-  const moodleCourseIdNum = isCat ? null : Number(addCourseCourseId);
- 
-  const course_nome_hint = (() => {
-    if (isCat) {
-      const catId = Number(addCourseCourseId.replace("cat_", ""));
-      const cat = moodleCourses.find(i => i.type === "category" && i.id === catId);
-      return (cat as any)?.name || `Categoria ${catId}`;
-    } else {
-      const course = moodleCourses.find(i => i.type === "course" && i.id === moodleCourseIdNum);
-      return (course as any)?.fullname || `Curso ${addCourseCourseId}`;
-    }
-  })();
- 
-  try {
-    // 1. Salvar curso adicional no banco
-    const res = await fetch(`/api/students/${addCourseStudentId}/courses`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-session-token": sessionToken || "" },
-      body: JSON.stringify({
-        course_nome: course_nome_hint,
-        course_id: isCat ? null : moodleCourseIdNum,
-        moodle_course_id: isCat ? null : moodleCourseIdNum,
-      }),
-    });
- 
-    if (!res.ok) {
-      const err = await res.json();
-      triggerFeedback("error", err.error || "Erro ao adicionar curso.");
-      return;
-    }
- 
-    triggerFeedback("success", `Curso adicionado! Matriculando no AVA...`);
-    setShowAddCourseModal(false);
- 
-    // 2. Matricular no AVA Moodle
-    await handleEnrollInMoodle(addCourseStudentId, addCourseCourseId);
- 
-    // 3. Abrir modal de cobrança para este curso
-    setCobrancaStudentId(addCourseStudentId);
-    setCobrancaStudentNome(addCourseStudentNome);
-    setCobrancaDescricao(`Matrícula — ${course_nome_hint}`);
-    setCobrancaVencimento(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]);
-    setCobrancaValor("");
-    setCobrancaParcelas("1");
-    setCobrancaDesconto("0");
-    setCobrancaResult(null);
-    setShowCobrancaModal(true);
- 
-    setAddCourseCourseId("");
-    loadAllData();
- 
-  } catch {
-    triggerFeedback("error", "Erro de rede.");
-  }
-};
+
 
   // SUBMISSÃO DE FORMULÁRIOS
 
@@ -545,8 +475,12 @@ const handleCreateStudent = async (e: React.FormEvent) => {
       // Abrir modal de cobrança
       
       setCobrancaDescricao(`Matrícula — ${createdStudent.course_nome || "Curso"}`);
+
       setCobrancaStudentId(createdStudent.id);
       setCobrancaStudentNome(studentNomeParaCobranca);
+      
+      
+      
       setCobrancaVencimento(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]);
       setCobrancaValor("");
       setCobrancaParcelas("1");
@@ -1473,8 +1407,8 @@ if (sessionToken && sessionRole) {
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <h1 className="text-base font-bold font-display tracking-tight text-white leading-none">IMEPEDU - Financeiro</h1>
-                <span className="text-[10px] bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded-full font-semibold">v1.3</span>
+                <h1 className="text-base font-bold font-display tracking-tight text-white leading-none">EduFinance</h1>
+                <span className="text-[10px] bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded-full font-semibold">v1.2</span>
               </div>
               <p className="text-[10px] text-slate-500 mt-1 leading-none font-medium">Magalhães Educação</p>
             </div>
@@ -1489,7 +1423,7 @@ if (sessionToken && sessionRole) {
             <Database className="w-3.5 h-3.5 shrink-0" />
             <div className="flex-1 leading-tight">
               <span className="block font-bold">Banco de Dados</span>
-              <span className="text-[10px] text-slate-400 capitalize">{dbStatus.mode === "MYSQL" ? "" : "Modo Local (JSON)"}</span>
+              <span className="text-[10px] text-slate-400 capitalize">{dbStatus.mode === "MYSQL" ? "CloudPanel MySQL" : "Modo Local (JSON)"}</span>
             </div>
             <span className={`w-1.5 h-1.5 rounded-full ${dbStatus.mode === "MYSQL" ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`}></span>
           </div>
@@ -1876,7 +1810,7 @@ if (sessionToken && sessionRole) {
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
                       <div className="space-y-2">
                         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Matrícula Escolar Ativa</p>
-                        <h3 className="text-3xl font-semibold font-display tracking-tight text-slate-800">{filteredStudents.length}</h3>
+                        <h3 className="text-3xl font-semibold font-display tracking-tight text-slate-800">{classes.length}</h3>
                         <p className="text-[11px] text-slate-500">Turmas nos três turnos</p>
                       </div>
                       <div className="p-4 bg-sky-50 text-sky-600 rounded-2xl">
@@ -2359,21 +2293,6 @@ if (sessionToken && sessionRole) {
       Editar
     </button>
     <span className="text-slate-200">|</span>
-    {/* Adicionar Curso */}
-    <button
-    onClick={() => {
-    setAddCourseStudentId(s.id);
-    setAddCourseStudentNome(s.nome);
-    setAddCourseStudentEmail(s.email);
-    setAddCourseCourseId("");
-    setShowAddCourseModal(true);
-  }}
-  className="text-xs text-amber-600 hover:text-amber-800 font-semibold"
-  title="Adicionar outro curso"
-  >
-  + Curso
-  </button>
-  <span className="text-slate-200">|</span>
 
     {/* Alterar Status */}
     <select
@@ -4441,86 +4360,14 @@ const studentTxs = transactions.filter(t => t.student_id === student.id);
       {/* FOOTER DO SISTEMA (DENTRO DA COLUNA DIREITA SCROLLÁVEL) */}
       <footer className="bg-slate-950 text-slate-500 text-xs py-6 border-t border-slate-900 shrink-0 select-none mt-auto">
         <div className="w-full px-8 text-center space-y-2">
-          <p>© 2026 IMEPEDU - Financeiro — Magalhães Educação. Todos os direitos reservados.</p>
-          <p className="text-[10px] text-slate-600">Sistema de Gestão Escolar</p>
+          <p>© 2026 EduFinance — Magalhães Educação. Todos os direitos reservados.</p>
+          <p className="text-[10px] text-slate-600">Sistema otimizado para VPS Hostinger, conectores MySQL dedicados e compilação Nginx em CloudPanel.</p>
         </div>
       </footer>
 
       </div> {/* fim da coluna principal (direita) */}
 
       {/* POPUPS DE CADASTROS (MODAIS) */}
-{/* MODAL DE ADICIONAR CURSO */}
-{showAddCourseModal && (
-  <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-    <motion.div
-      initial={{ scale: 0.95, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      className="bg-white rounded-2xl shadow-2xl border border-slate-100 max-w-md w-full overflow-hidden"
-    >
-      <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
-        <div>
-          <h3 className="text-base font-bold font-display">Adicionar Curso</h3>
-          <p className="text-[11px] text-slate-400">{addCourseStudentNome}</p>
-        </div>
-        <button onClick={() => setShowAddCourseModal(false)} className="text-slate-400 hover:text-white font-bold">✕</button>
-      </div>
- 
-      <form onSubmit={handleAddCourseToStudent} className="p-6 space-y-4">
-        <div className="space-y-1">
-          <label className="text-[11px] font-bold text-slate-600 block flex items-center justify-between">
-            <span>Curso do AVA Moodle *
-              {loadingMoodleCourses && <span className="text-[9px] text-indigo-500 animate-pulse ml-1">carregando...</span>}
-            </span>
-            <button type="button" onClick={loadMoodleCourses} className="text-[9px] text-indigo-500 hover:text-indigo-700 underline font-normal">↻ Atualizar</button>
-          </label>
-          <select
-            required
-            value={addCourseCourseId}
-            onChange={(e) => setAddCourseCourseId(e.target.value)}
-            className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:ring-1 focus:ring-indigo-600 focus:bg-white font-medium text-slate-800"
-          >
-            <option value="">Selecione um curso...</option>
-            {(() => {
-              const categories = moodleCourses.filter(i => i.type === "category");
-              const coursesList = moodleCourses.filter(i => i.type === "course");
-              return categories.map(cat => (
-                <optgroup key={`cat-${cat.id}`} label={`📁 ${cat.name} (${cat.coursecount} cursos)`}>
-                  <option value={`cat_${cat.id}`}>✦ Todos os cursos de {cat.name}</option>
-                  {coursesList.filter(c => c.categoryid === cat.id).map(course => (
-                    <option key={`course-${course.id}`} value={String(course.id)}>
-                      └ {course.fullname}
-                    </option>
-                  ))}
-                </optgroup>
-              ));
-            })()}
-          </select>
-          <p className="text-[9px] text-indigo-600 font-medium bg-indigo-50 rounded-lg p-2">
-            📚 O aluno será matriculado automaticamente no AVA e um novo boleto será gerado.
-          </p>
-        </div>
- 
-        <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
-          <button
-            type="button"
-            onClick={() => setShowAddCourseModal(false)}
-            className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-100"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            className="px-5 py-2 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white"
-          >
-            Adicionar Curso
-          </button>
-        </div>
-      </form>
-    </motion.div>
-  </div>
-)}
-
-
 
       {/* MODAL DO ASAAS */}
 
@@ -4857,8 +4704,7 @@ const studentTxs = transactions.filter(t => t.student_id === student.id);
                   className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white transition-all font-medium text-slate-800"
                 >
                   <option value="ATIVO">ATIVO - Captação Aberta</option>
-                  <option value="INATIVO">INATIVO - Desativado</option>
-                  <option value="BLOQUEADO">BLOQUEADO - Manutenção / Fechado</option>
+                  <option value="RESERVADO">BLOQUEADO - Manutenção / Fechado</option>
                 </select>
               </div>
 
